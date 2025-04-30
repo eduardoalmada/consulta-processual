@@ -2,15 +2,25 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# Rota raiz para teste
 @app.route('/')
 def home():
-    return "API Consulta Processual está no ar 🚀"
+    return 'API Consulta Processual TJRJ funcionando!'
 
-# Exemplo de rota futura para consulta processual (ainda a ser implementada)
-@app.route('/consulta', methods=['GET'])
-def consulta():
-    return jsonify({"mensagem": "Aqui será feita a consulta pelo número do processo"}), 200
+@app.route('/consultar', methods=['POST'])
+def consultar():
+    dados = request.get_json()
+    numero_processo = dados.get('numero_processo')
 
-if __name__ == '__main__':
-    app.run(debug=True)
+    if not numero_processo:
+        return jsonify({'erro': 'Número do processo não fornecido'}), 400
+
+    # Aqui viria a lógica de scraping no site do TJRJ
+    resultado = {
+        'numero_processo': numero_processo,
+        'nome_parte': 'Fulano de Tal',
+        'assunto': 'Danos Morais',
+        'situacao': 'Em Andamento',
+        'ultima_movimentacao': 'Petição Juntada - 25/04/2025'
+    }
+
+    return jsonify(resultado)
