@@ -1,61 +1,68 @@
-
 from flask import Flask, request, jsonify
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 import time
 
 app = Flask(__name__)
 
-@app.route("/consultar", methods=["POST"])
+@app.route('/consultar', methods=['POST'])
 def consultar_processo():
-    numero_processo = request.json.get("numero_processo")
+    dados = request.get_json()
+    numero_processo = dados.get("numero_processo")
 
     if not numero_processo:
         return jsonify({"erro": "Número do processo não fornecido"}), 400
 
     options = Options()
-    options.add_argument("--headless=new")
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
 
-    driver = webdriver.Chrome(options=options)
-
     try:
+        driver = webdriver.Chrome(options=options)
         driver.get("https://www.tjrj.jus.br/web/guest/processos")
 
-        time.sleep(2)
+        # Esperar campo de número do processo
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, "numeroProcesso"))
+        )
 
-        iframe = driver.find_element(By.CSS_SELECTOR, "iframe[src*='consultaprocessual']")
-        driver.switch_to.frame(iframe)
+        # Preencher número e pesquisar
+        input_campo = driver.find_element(By.ID, "numeroProcesso")
+        input_campo.clear()
+        input_campo.send_keys(numero_processo)
 
-        campo_processo = driver.find_element(By.ID, "txtNumeroProcesso")
-        campo_processo.send_keys(numero_processo)
+        botao = driver.find_element(By.ID, "botaoPesquisar")
+        botao.click()
 
-        botao_pesquisar = driver.find_element(By.ID, "btnPesquisar")
-        botao_pesquisar.click()
+        # Esperar resultado carregar
+        WebDriverWait(driver, 15).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "detalhes-processo"))
+        )
 
-        time.sleep(6)
+        # Extração dos dados
+        nome_parte = driver.find_element(By.XPATH, "//div[contains(text(),'Partes')]/following-sibling::div").text
+        assunto = driver.find_element(By.XPATH, "//div[contains(text(),'Assunto')]/following-sibling::div").text
+        situacao = driver.find_element(By.XPATH, "//div[contains(text(),'Situação')]/following-sibling::div").text
+        ultima_mov = driver.find_element(By.XPATH, "//div[contains(text(),'Última Movimentação')]/following-sibling::div").text
 
-        resultado = driver.find_element(By.ID, "lblCabecalho").text
-        situacao = driver.find_element(By.ID, "lblSituacaoProcesso").text
-        movimentacao = driver.find_element(By.ID, "lblUltimaMovimentacao").text
-        assunto = driver.find_element(By.ID, "lblAssunto").text
-        parte = driver.find_element(By.ID, "lblPartes").text
+        driver.quit()
 
         return jsonify({
             "numero_processo": numero_processo,
-            "nome_parte": parte,
+            "nome_parte": nome_parte,
             "assunto": assunto,
             "situacao": situacao,
-            "ultima_movimentacao": movimentacao,
-            "resumo": resultado
+            "ultima_movimentacao": ultima_mov
         })
 
     except Exception as e:
-        return jsonify({"erro": f"Erro ao consultar: {str(e)}"}), 500
-    finally:
         driver.quit()
+        return jsonify({"erro": str(e)}), 500
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+if __name__ == '__main__':
+    app.run(debug=True)
